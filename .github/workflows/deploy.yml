@@ -4,9 +4,14 @@
 # El repositorio "contenido" es privado: se clona con una deploy key de solo
 # lectura cuya clave privada está en el secret CONTENIDO_DEPLOY_KEY.
 #
-# "contenido" guarda la web tal cual estaba en el hosting, incluido el código
-# PHP (autobus, phpMyAdmin...). GitHub Pages solo sirve ficheros estáticos,
-# así que antes de publicar se elimina todo lo relacionado con PHP.
+# Estructura de "contenido":
+#   docs/          la web nueva: es lo único que se publica
+#   legado/        la web antigua del hosting (PHP, phpMyAdmin...): no se publica
+#   herramientas/  generadores de la web: no se publican
+#   Contenido.md   fuente de los textos: no se publica
+#
+# GitHub Pages solo sirve ficheros estáticos, así que antes de publicar se
+# comprueba que en docs/ no hay nada relacionado con PHP.
 
 name: Desplegar web
 
@@ -43,37 +48,19 @@ jobs:
           persist-credentials: false
           path: sitio
 
-      - name: Eliminar código PHP
-        working-directory: sitio
+      - name: Comprobar que no hay PHP en docs
+        working-directory: sitio/docs
         run: |
-          # Aplicaciones PHP y directorios del hosting
-          rm -rf autobus cgi-bin
-          find . -maxdepth 1 -type d -iname 'phpmyadmin*' -exec rm -rf {} +
-
-          # Ficheros PHP sueltos, configuración de PHP/Apache y registros
-          find . -type f -not -path './.git/*' \( \
-              -iname '*.php' -o -iname '*.php[0-9]' -o -iname '*.phtml' \
-              -o -iname '*.phar' -o -iname 'php.ini' -o -iname '.user.ini' \
-              -o -iname '.htaccess' -o -iname 'error_log' \
-            \) -print -delete
-
-          # Ficheros de trabajo del nuevo diseño (no se publican)
-          rm -rf Contenido.md herramientas
-
-          # Directorios que hayan quedado vacíos
-          find . -mindepth 1 -type d -empty -not -path './.git*' -print -delete
-
-      - name: Comprobar que no queda PHP
-        working-directory: sitio
-        run: |
-          restos=$(find . -not -path './.git/*' \( -iname '*.php*' -o -iname '*.phtml' -o -ipath '*phpmyadmin*' -o -path './autobus*' \) -print)
+          restos=$(find . \( -iname '*.php*' -o -iname '*.phtml' -o -iname '*.phar' \
+              -o -iname '.htaccess' -o -iname '.user.ini' -o -iname 'error_log' \
+              -o -ipath '*phpmyadmin*' \) -print)
           if [ -n "$restos" ]; then
-            echo "::error::Quedan ficheros relacionados con PHP:"
+            echo "::error::docs/ contiene ficheros relacionados con PHP:"
             echo "$restos"
             exit 1
           fi
           echo "Se publicará:"
-          find . -not -path './.git/*' -type f | sort
+          find . -type f | sort
 
       - name: Configurar Pages
         uses: actions/configure-pages@v6
@@ -81,7 +68,7 @@ jobs:
       - name: Subir artefacto
         uses: actions/upload-pages-artifact@v5
         with:
-          path: sitio
+          path: sitio/docs
 
   deploy:
     needs: build
