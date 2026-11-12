@@ -8,7 +8,11 @@
 #   docs/          la web nueva: es lo único que se publica
 #   legado/        la web antigua del hosting (PHP, phpMyAdmin...): no se publica
 #   herramientas/  generadores de la web: no se publican
-#   Contenido.md   fuente de los textos: no se publica
+#   Contenido.md   fuente de los textos (con apartados/): no se publica
+#
+# Antes de publicar se regeneran las páginas con herramientas/, así que basta
+# con subir los .md para que la web se actualice. Si las páginas guardadas en
+# docs/ no coinciden con lo regenerado se avisa, pero se publica lo regenerado.
 #
 # GitHub Pages solo sirve ficheros estáticos, así que antes de publicar se
 # comprueba que en docs/ no hay nada relacionado con PHP.
@@ -47,6 +51,22 @@ jobs:
           ssh-key: ${{ secrets.CONTENIDO_DEPLOY_KEY }}
           persist-credentials: false
           path: sitio
+
+      - name: Regenerar las páginas
+        working-directory: sitio
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet markdown
+          "$RUNNER_TEMP/venv/bin/python" herramientas/generar_mundo.py
+          "$RUNNER_TEMP/venv/bin/python" herramientas/generar_paginas.py
+
+          cambios=$(git status --porcelain -- docs)
+          if [ -n "$cambios" ]; then
+            echo "::warning::Las páginas de docs/ no estaban regeneradas en contenido; se publica la versión regenerada. Ficheros afectados:"
+            echo "$cambios"
+          else
+            echo "Las páginas de docs/ ya estaban al día."
+          fi
 
       - name: Comprobar que no hay PHP en docs
         working-directory: sitio/docs
